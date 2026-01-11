@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7
+    volumes:
+      - ./redis:/etc/redis
+
+  postgres:
+    image: postgres:16
+    volumes:
+      - ./postgres:/etc/postgres
+
+  nginx:
+    image: nginx:1.25
+    volumes:
+      - ./nginx:/etc/nginx
