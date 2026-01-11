@@ -3,13 +3,13 @@ extends Control
 const GRID_COLUMNS := 5
 const GRID_ROWS := 10
 const CELL_SIZE := Vector2(96, 96)
-const ROUND_SECONDS := 180
-const PHASE_SECONDS := 30
 const ROUND_START_COUNTDOWN := 5
 const TURBO_ROUND_START := 8
-const TURBO_PHASE_SECONDS := 15
+const TURBO_ROUND_SECONDS := 15
 
-const PHASES := ["Действия", "ЮнитР", "Завершение хода"]
+const ROUND_LIMITS := [20, 50, 45, 40, 35, 30, 25, 20]
+
+const PHASES := ["Действия", "ЮнитР"]
 
 const STATE_NORMAL := "normal"
 const STATE_FOG := "fog"
@@ -37,8 +37,7 @@ const HIGHLIGHT_ATTACK := "attack"
 @onready var hp_sum_label: Label = %HpSumLabel
 
 var _current_phase_index := 0
-var _round_time_left := float(ROUND_SECONDS)
-var _phase_time_left := float(PHASE_SECONDS)
+var _round_time_left := 0.0
 var _round_index := 0
 var _round_start_time_left := float(ROUND_START_COUNTDOWN)
 var _match_started := false
@@ -64,23 +63,23 @@ func _process(delta: float) -> void:
 	_update_round_start(delta)
 	if _match_started:
 		_round_time_left = maxf(_round_time_left - delta, 0.0)
-		_phase_time_left = maxf(_phase_time_left - delta, 0.0)
 	_update_timer_labels()
 
 func _advance_phase() -> void:
-	_current_phase_index = (_current_phase_index + 1) % PHASES.size()
 	if _current_phase_index == 0:
+		_current_phase_index = 1
+	else:
+		_current_phase_index = 0
 		_round_index += 1
 		_update_round_state()
-	_phase_time_left = float(_current_phase_limit_seconds())
 	_update_phase_ui()
 
 func _update_phase_ui() -> void:
 	phase_label.text = "Фаза: %s" % PHASES[_current_phase_index]
 
 func _update_timer_labels() -> void:
-	round_timer_label.text = "Раунд: %s" % _format_time(_round_time_left)
-	phase_timer_label.text = "Лимит фазы: %s" % _format_time(_phase_time_left)
+	round_timer_label.text = "Таймер хода: %s" % _format_time(_round_time_left)
+	phase_timer_label.text = "Раунд %d" % _round_index
 
 func _update_round_state() -> void:
 	if _round_index < TURBO_ROUND_START:
@@ -88,12 +87,14 @@ func _update_round_state() -> void:
 	else:
 		turbo_info_label.text = "Турбо-битва активна: 15с, 1× UnitR, урон ×3."
 	_round_status_label.text = "Раунд %d" % _round_index
-	_phase_time_left = float(_current_phase_limit_seconds())
+	_round_time_left = float(_current_round_limit_seconds())
 
-func _current_phase_limit_seconds() -> int:
+func _current_round_limit_seconds() -> int:
 	if _round_index >= TURBO_ROUND_START:
-		return TURBO_PHASE_SECONDS
-	return PHASE_SECONDS
+		return TURBO_ROUND_SECONDS
+	if _round_index >= 0 and _round_index < ROUND_LIMITS.size():
+		return ROUND_LIMITS[_round_index]
+	return ROUND_LIMITS[ROUND_LIMITS.size() - 1]
 
 func _update_round_start(delta: float) -> void:
 	if _match_started:
@@ -103,7 +104,7 @@ func _update_round_start(delta: float) -> void:
 	round_status_label.text = "Раунд 0: стартовый отсчёт"
 	if _round_start_time_left <= 0.0:
 		_match_started = true
-		_round_index = 1
+		_round_index = 0
 		_update_round_state()
 		round_start_overlay.hide()
 
@@ -116,7 +117,7 @@ func _update_round_start_overlay() -> void:
 	round_start_label.text = "Раунд 0 стартует через %d" % seconds_left
 
 func _update_score_ui() -> void:
-	hp_sum_label.text = "HP: 120"
+	hp_sum_label.text = "25 : 25"
 
 func _format_time(time_left: float) -> String:
 	var total_seconds := int(round(time_left))

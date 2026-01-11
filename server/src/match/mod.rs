@@ -1,6 +1,6 @@
 use crate::rating::{RatingService, RatingUpdate};
 use crate::simulation::resolver::{
-    ActionCommand, Cell, MatchState, Sector, UnitA, UnitRCommand, FIELD_COLS, FIELD_ROWS,
+    ActionCommand, Cell, MatchState, UnitA, UnitRCommand, FIELD_COLS, FIELD_ROWS,
 };
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -246,40 +246,25 @@ pub enum ClientMessage {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ActionPayload {
     Move {
-        unit_id: u32,
+        unit_ids: Vec<u32>,
         to: CellPayload,
-        delay_rounds: u32,
     },
     Attack {
-        unit_id: u32,
+        unit_ids: Vec<u32>,
         target: CellPayload,
-        damage: i32,
-        delay_rounds: u32,
     },
 }
 
 impl ActionPayload {
     fn to_action_command(self) -> ActionCommand {
         match self {
-            ActionPayload::Move {
-                unit_id,
-                to,
-                delay_rounds,
-            } => ActionCommand::Move {
-                unit_id,
+            ActionPayload::Move { unit_ids, to } => ActionCommand::Move {
+                unit_ids,
                 to: to.to_cell(),
-                delay_rounds,
             },
-            ActionPayload::Attack {
-                unit_id,
-                target,
-                damage,
-                delay_rounds,
-            } => ActionCommand::Attack {
-                unit_id,
+            ActionPayload::Attack { unit_ids, target } => ActionCommand::Attack {
+                unit_ids,
                 target: target.to_cell(),
-                damage,
-                delay_rounds,
             },
         }
     }
@@ -288,29 +273,14 @@ impl ActionPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum UnitRPayload {
-    Recon {
-        sector: SectorPayload,
-        delay_rounds: u32,
-    },
-    Block {
-        cell: CellPayload,
-        delay_rounds: u32,
-    },
+    Assign { cell: CellPayload },
 }
 
 impl UnitRPayload {
     fn to_unitr_command(self) -> UnitRCommand {
         match self {
-            UnitRPayload::Recon {
-                sector,
-                delay_rounds,
-            } => UnitRCommand::Recon {
-                sector: sector.to_sector(),
-                delay_rounds,
-            },
-            UnitRPayload::Block { cell, delay_rounds } => UnitRCommand::Block {
+            UnitRPayload::Assign { cell } => UnitRCommand::Assign {
                 cell: cell.to_cell(),
-                delay_rounds,
             },
         }
     }
@@ -332,22 +302,6 @@ impl CellPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SectorPayload {
-    Left,
-    Right,
-}
-
-impl SectorPayload {
-    fn to_sector(self) -> Sector {
-        match self {
-            SectorPayload::Left => Sector::Left,
-            SectorPayload::Right => Sector::Right,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     State(StateSnapshot),
@@ -370,7 +324,7 @@ pub struct StateSnapshot {
     pub round: u32,
     pub field: [[i32; FIELD_COLS]; FIELD_ROWS],
     pub units: Vec<UnitSnapshot>,
-    pub active_recon: Vec<String>,
+    pub scouted_cells: Vec<CellPayload>,
     pub active_blocks: Vec<CellPayload>,
 }
 
@@ -397,12 +351,12 @@ fn snapshot_state(state: &MatchState) -> StateSnapshot {
                 },
             })
             .collect(),
-        active_recon: state
-            .active_recon
+        scouted_cells: state
+            .scouted_cells
             .iter()
-            .map(|sector| match sector {
-                Sector::Left => "left".to_string(),
-                Sector::Right => "right".to_string(),
+            .map(|cell| CellPayload {
+                row: cell.row,
+                col: cell.col,
             })
             .collect(),
         active_blocks: state
@@ -440,27 +394,32 @@ struct PlayerConnection {
 }
 
 fn initial_state() -> MatchState {
-    let mut state = MatchState::new(5);
+    let mut state = MatchState::new(10);
     state.units = vec![
         UnitA {
             id: 1,
-            hp: 10,
+            hp: 5,
             cell: Cell { row: 1, col: 1 },
         },
         UnitA {
             id: 2,
-            hp: 10,
-            cell: Cell { row: 3, col: 3 },
+            hp: 5,
+            cell: Cell { row: 1, col: 3 },
         },
         UnitA {
             id: 3,
-            hp: 10,
-            cell: Cell { row: 1, col: 8 },
+            hp: 5,
+            cell: Cell { row: 8, col: 1 },
         },
         UnitA {
             id: 4,
-            hp: 10,
-            cell: Cell { row: 3, col: 6 },
+            hp: 5,
+            cell: Cell { row: 8, col: 3 },
+        },
+        UnitA {
+            id: 5,
+            hp: 5,
+            cell: Cell { row: 9, col: 2 },
         },
     ];
     state
