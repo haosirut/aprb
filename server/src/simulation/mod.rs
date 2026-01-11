@@ -1,2 +1,2 @@
-pub mod resolver;
 pub mod bot;
+pub mod resolver;
