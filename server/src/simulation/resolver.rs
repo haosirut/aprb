@@ -89,14 +89,8 @@ pub enum ActionCommand {
 
 #[derive(Debug, Clone)]
 pub enum UnitRCommand {
-    Recon {
-        sector: Sector,
-        delay_rounds: u32,
-    },
-    Block {
-        cell: Cell,
-        delay_rounds: u32,
-    },
+    Recon { sector: Sector, delay_rounds: u32 },
+    Block { cell: Cell, delay_rounds: u32 },
 }
 
 #[derive(Debug, Clone)]
@@ -158,8 +152,7 @@ impl MatchState {
 
     pub fn queue_unitr(&mut self, command: UnitRCommand) -> Result<(), ResolverError> {
         let (delay_rounds, execute_round) = match &command {
-            UnitRCommand::Recon { delay_rounds, .. }
-            | UnitRCommand::Block { delay_rounds, .. } => {
+            UnitRCommand::Recon { delay_rounds, .. } | UnitRCommand::Block { delay_rounds, .. } => {
                 (*delay_rounds, self.round + delay_rounds)
             }
         };
