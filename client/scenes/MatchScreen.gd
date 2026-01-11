@@ -5,6 +5,9 @@ const GRID_ROWS := 10
 const CELL_SIZE := Vector2(96, 96)
 const ROUND_SECONDS := 180
 const PHASE_SECONDS := 30
+const ROUND_START_COUNTDOWN := 5
+const TURBO_ROUND_START := 8
+const TURBO_PHASE_SECONDS := 15
 
 const PHASES := ["Действия", "ЮнитР", "Завершение хода"]
 
@@ -27,10 +30,18 @@ const HIGHLIGHT_ATTACK := "attack"
 @onready var move_button: Button = %MoveButton
 @onready var attack_button: Button = %AttackButton
 @onready var scout_button: Button = %ScoutButton
+@onready var round_status_label: Label = %RoundStatusLabel
+@onready var turbo_info_label: Label = %TurboInfoLabel
+@onready var round_start_overlay: ColorRect = %RoundStartOverlay
+@onready var round_start_label: Label = %RoundStartLabel
+@onready var hp_sum_label: Label = %HpSumLabel
 
 var _current_phase_index := 0
 var _round_time_left := float(ROUND_SECONDS)
 var _phase_time_left := float(PHASE_SECONDS)
+var _round_index := 0
+var _round_start_time_left := float(ROUND_START_COUNTDOWN)
+var _match_started := false
 
 var _selected_unit_index := -1
 var _unit_assignments: Array[String] = []
@@ -44,16 +55,24 @@ func _ready() -> void:
 	scout_button.pressed.connect(func() -> void: _assign_action("Разведка"))
 	_build_board()
 	_build_unit_panel()
+	_update_round_state()
 	_update_phase_ui()
+	_update_round_start_overlay()
+	_update_score_ui()
 
 func _process(delta: float) -> void:
-	_round_time_left = maxf(_round_time_left - delta, 0.0)
-	_phase_time_left = maxf(_phase_time_left - delta, 0.0)
+	_update_round_start(delta)
+	if _match_started:
+		_round_time_left = maxf(_round_time_left - delta, 0.0)
+		_phase_time_left = maxf(_phase_time_left - delta, 0.0)
 	_update_timer_labels()
 
 func _advance_phase() -> void:
 	_current_phase_index = (_current_phase_index + 1) % PHASES.size()
-	_phase_time_left = float(PHASE_SECONDS)
+	if _current_phase_index == 0:
+		_round_index += 1
+		_update_round_state()
+	_phase_time_left = float(_current_phase_limit_seconds())
 	_update_phase_ui()
 
 func _update_phase_ui() -> void:
@@ -62,6 +81,42 @@ func _update_phase_ui() -> void:
 func _update_timer_labels() -> void:
 	round_timer_label.text = "Раунд: %s" % _format_time(_round_time_left)
 	phase_timer_label.text = "Лимит фазы: %s" % _format_time(_phase_time_left)
+
+func _update_round_state() -> void:
+	if _round_index < TURBO_ROUND_START:
+		turbo_info_label.text = "Турбо-битва после 7 раунда: таймер 15с, 1× UnitR, урон ×3."
+	else:
+		turbo_info_label.text = "Турбо-битва активна: 15с, 1× UnitR, урон ×3."
+	_round_status_label.text = "Раунд %d" % _round_index
+	_phase_time_left = float(_current_phase_limit_seconds())
+
+func _current_phase_limit_seconds() -> int:
+	if _round_index >= TURBO_ROUND_START:
+		return TURBO_PHASE_SECONDS
+	return PHASE_SECONDS
+
+func _update_round_start(delta: float) -> void:
+	if _match_started:
+		return
+	_round_start_time_left = maxf(_round_start_time_left - delta, 0.0)
+	_update_round_start_overlay()
+	round_status_label.text = "Раунд 0: стартовый отсчёт"
+	if _round_start_time_left <= 0.0:
+		_match_started = true
+		_round_index = 1
+		_update_round_state()
+		round_start_overlay.hide()
+
+func _update_round_start_overlay() -> void:
+	if _match_started:
+		round_start_overlay.hide()
+		return
+	round_start_overlay.show()
+	var seconds_left := int(round(_round_start_time_left))
+	round_start_label.text = "Раунд 0 стартует через %d" % seconds_left
+
+func _update_score_ui() -> void:
+	hp_sum_label.text = "HP: 120"
 
 func _format_time(time_left: float) -> String:
 	var total_seconds := int(round(time_left))
@@ -125,7 +180,7 @@ func _make_cell(state: String, highlight: String) -> PanelContainer:
 	style.border_width_right = 3
 	style.border_width_top = 3
 	style.border_width_bottom = 3
-	style.border_color = _highlight_color(highlight)
+	style.border_color = _border_color(state, highlight)
 	style.corner_radius_top_left = 6
 	style.corner_radius_top_right = 6
 	style.corner_radius_bottom_left = 6
@@ -165,16 +220,21 @@ func _highlight_color(highlight: String) -> Color:
 		_:
 			return Color("#2c2f3a")
 
+func _border_color(state: String, highlight: String) -> Color:
+	if state == STATE_DESTROYED:
+		return Color("#d94a4a")
+	return _highlight_color(highlight)
+
 func _state_label(state: String) -> String:
 	match state:
 		STATE_FOG:
 			return "Туман"
 		STATE_SCOUT:
-			return "Разведка"
+			return "Разведка (сохраняется)"
 		STATE_BLOCKED:
-			return "Блок"
+			return "Блок (1 раунд)"
 		STATE_DESTROYED:
-			return "Разрушена"
+			return "Недоступна"
 		_:
 			return ""
 
