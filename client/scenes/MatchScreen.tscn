@@ -1,3 +1,83 @@
 [gd_scene format=3]
 
-[node name="MatchScreen" type="Node2D"]
+[ext_resource type="Script" path="res://scenes/MatchScreen.gd" id=1]
+
+[node name="MatchScreen" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource(1)
+
+[node name="RootMargin" type="MarginContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
+
+[node name="RootVBox" type="VBoxContainer" parent="RootMargin"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+separation = 16
+
+[node name="TopBar" type="HBoxContainer" parent="RootMargin/RootVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 0
+separation = 12
+
+[node name="PhaseLabel" type="Label" parent="RootMargin/RootVBox/TopBar"]
+text = "Фаза: Действия"
+
+[node name="PhaseArrowButton" type="Button" parent="RootMargin/RootVBox/TopBar"]
+text = "→"
+custom_minimum_size = Vector2(48, 32)
+
+[node name="RoundTimerLabel" type="Label" parent="RootMargin/RootVBox/TopBar"]
+text = "Раунд: 03:00"
+size_flags_horizontal = 3
+horizontal_alignment = 2
+
+[node name="PhaseTimerLabel" type="Label" parent="RootMargin/RootVBox/TopBar"]
+text = "Лимит фазы: 00:30"
+
+[node name="BoardSection" type="CenterContainer" parent="RootMargin/RootVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="BoardArea" type="Control" parent="RootMargin/RootVBox/BoardSection"]
+custom_minimum_size = Vector2(560, 1120)
+size_flags_horizontal = 0
+size_flags_vertical = 0
+
+[node name="ActionPanel" type="HBoxContainer" parent="RootMargin/RootVBox"]
+size_flags_horizontal = 3
+separation = 12
+
+[node name="ActionLabel" type="Label" parent="RootMargin/RootVBox/ActionPanel"]
+text = "Пакетные действия:"
+
+[node name="MoveButton" type="Button" parent="RootMargin/RootVBox/ActionPanel"]
+text = "Перемещение"
+
+[node name="AttackButton" type="Button" parent="RootMargin/RootVBox/ActionPanel"]
+text = "Атака"
+
+[node name="ScoutButton" type="Button" parent="RootMargin/RootVBox/ActionPanel"]
+text = "Разведка"
+
+[node name="UnitPanel" type="PanelContainer" parent="RootMargin/RootVBox"]
+size_flags_horizontal = 3
+
+[node name="UnitVBox" type="VBoxContainer" parent="RootMargin/RootVBox/UnitPanel"]
+custom_minimum_size = Vector2(0, 120)
+size_flags_horizontal = 3
+separation = 8
+
+[node name="UnitPanelLabel" type="Label" parent="RootMargin/RootVBox/UnitPanel/UnitVBox"]
+text = "Выбор юнитов (1×5, игрок снизу)"
+
+[node name="UnitRow" type="HBoxContainer" parent="RootMargin/RootVBox/UnitPanel/UnitVBox"]
+size_flags_horizontal = 3
+separation = 8
