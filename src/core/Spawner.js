@@ -1,12 +1,14 @@
 console.log('[Core] Spawner loaded');
 
 import { State, calculateEnemyHP } from './State.js';
+import { Gate } from '../entities/Gate.js';
 
 const GATE_TYPES = ['+', '-', '*', '/'];
-const FIXED_GAP = 180;
-const FALL_SPEED = 120;
+const FIXED_GAP = 160;
+const FALL_SPEED = 150;
 const SPAWN_CYCLE = ['GATE_PAIR', 'GATE_PAIR', 'ENEMY'];
 const CUBE_SIZE = 12;
+const GATE_HEIGHT = 40;
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -31,6 +33,7 @@ export class Spawner {
     this.totalSteps = 15 + levelNum * 5;
     this.stepsCompleted = 0;
     this.firstSpawnDone = false;
+    this.nextSpawnY = -GATE_HEIGHT;
   }
 
   get progress() {
@@ -47,7 +50,6 @@ export class Spawner {
       const first = this._spawnStep(canvasWidth);
       for (const s of first) {
         spawned.push(s);
-        console.log(`[Spawner] Initial spawn: type=${s.type}`);
       }
       this.stepsCompleted++;
       this.cycleIndex = (this.cycleIndex + 1) % SPAWN_CYCLE.length;
@@ -60,11 +62,6 @@ export class Spawner {
       const step = this._spawnStep(canvasWidth);
       for (const s of step) {
         spawned.push(s);
-        if (s.type === 'gate') {
-          console.log(`[Spawner] Created gate: ${s.type}${s.value} at x=${s.x} w=${s.width}`);
-        } else {
-          console.log(`[Spawner] Created enemy: cols=${s.cols} hp=${s.totalHP}`);
-        }
       }
       this.stepsCompleted++;
       this.cycleIndex = (this.cycleIndex + 1) % SPAWN_CYCLE.length;
@@ -93,23 +90,27 @@ export class Spawner {
     const w2 = 5 - w1;
     const maxOffset = Math.max(0, Math.floor(canvasWidth - (w1 + w2) * laneWidth));
     const offsetX = randomInt(0, maxOffset);
-    const x1 = offsetX;
-    const x2 = offsetX + w1 * laneWidth;
 
     const type1 = randomGateType();
     const type2 = randomGateType();
     const value1 = randomGateValue(type1);
     const value2 = randomGateValue(type2);
 
-    const gateHeight = 35;
-    const y = -gateHeight;
+    const g1 = new Gate({ x: offsetX, w: w1 * laneWidth, type: type1, value: value1 });
+    const g2 = new Gate({ x: offsetX + w1 * laneWidth, w: w2 * laneWidth, type: type2, value: value2 });
+
+    g1.y = g2.y = this.nextSpawnY;
 
     State.totalGates += 2;
 
-    return [
-      { type: 'gate', x: x1, y, width: w1 * laneWidth, height: gateHeight, pillarWidth: 12, type: type1, value: value1, fallSpeed: FALL_SPEED },
-      { type: 'gate', x: x2, y, width: w2 * laneWidth, height: gateHeight, pillarWidth: 12, type: type2, value: value2, fallSpeed: FALL_SPEED },
-    ];
+    console.log('[SPAWN] Created gates:', {
+      x1: g1.x, y1: g1.y, type1: g1.type, val1: g1.value,
+      x2: g2.x, y2: g2.y, type2: g2.type, val2: g2.value,
+    });
+
+    this.nextSpawnY -= (GATE_HEIGHT + FIXED_GAP);
+
+    return [g1, g2];
   }
 
   _spawnEnemy(canvasWidth) {
@@ -134,7 +135,7 @@ export class Spawner {
     const totalWidth = cols * cubeSize;
     const totalHeight = rows * cubeSize;
     const x = randomInt(0, Math.max(0, Math.floor(canvasWidth - totalWidth)));
-    const y = -totalHeight;
+    const y = this.nextSpawnY;
 
     const totalHP = calculateEnemyHP(State.playerUnits, State.gateHistory);
 
@@ -158,6 +159,10 @@ export class Spawner {
         }
       }
     }
+
+    this.nextSpawnY -= (totalHeight + FIXED_GAP);
+
+    console.log(`[SPAWN] Created enemy: cols=${cols} rows=${rows} hp=${totalHP} y=${y}`);
 
     return {
       type: 'enemy', x, y, width: totalWidth, height: totalHeight,

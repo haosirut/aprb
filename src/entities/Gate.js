@@ -9,22 +9,30 @@ const GATE_COLORS = {
   '/': '#f97316',
 };
 
+const debug = true;
+let _drawFrame = 0;
+
 export class Gate {
-  constructor(x, y, width, height, pillarWidth, type, value, fallSpeed) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-    this.pillarWidth = pillarWidth;
-    this.type = type;
-    this.value = value;
-    this.speed = fallSpeed;
+  constructor(config) {
+    this.x = config.x;
+    this.y = config.y;
+    this.w = config.w;
+    this.h = 40;
+    this.type = config.type;
+    this.value = config.value;
     this.passed = false;
+    this.speed = 150;
+    this.pillarWidth = 10;
+    this.lanes = Math.round(this.w / (window.innerWidth / 5));
     this.flashTimer = 0;
   }
 
   get effectZone() {
-    return { x: this.x + this.pillarWidth, w: this.width - 2 * this.pillarWidth };
+    return { x: this.x + this.pillarWidth, w: this.w - 2 * this.pillarWidth };
+  }
+
+  getColor() {
+    return GATE_COLORS[this.type] || '#888';
   }
 
   update(dt) {
@@ -35,41 +43,42 @@ export class Gate {
   }
 
   isOffScreen(canvasH) {
-    return this.y > canvasH + this.height;
+    return this.y > canvasH + this.h;
   }
 
-  render(ctx, _canvasW, canvasH) {
-    if (this.y < -this.height - 50 || this.y > canvasH + this.height + 50) return;
+  draw(ctx, canvasH) {
+    // Culling only at bottom edge — never skip gates above screen
+    if (this.y > canvasH + this.h) return;
 
-    ctx.save();
+    _drawFrame++;
+    if (debug && _drawFrame % 60 === 0) {
+      console.log('[RENDER] Drawing gate:', this.type, 'y:', this.y.toFixed(1), 'passed:', this.passed);
+    }
 
+    const pillarW = this.pillarWidth;
+    const effColor = this.flashTimer > 0 ? '#ffffff' : this.getColor();
+
+    // Pillars
     ctx.fillStyle = '#4a4a4a';
-    ctx.fillRect(this.x, this.y, this.pillarWidth, this.height);
-    ctx.fillRect(this.x + this.width - this.pillarWidth, this.y, this.pillarWidth, this.height);
+    ctx.fillRect(this.x, this.y, pillarW, this.h);
+    ctx.fillRect(this.x + this.w - pillarW, this.y, pillarW, this.h);
 
-    const baseColor = GATE_COLORS[this.type] || '#888';
-    ctx.fillStyle = this.flashTimer > 0 ? '#ffffff' : baseColor;
-    ctx.fillRect(this.x + this.pillarWidth, this.y, this.width - 2 * this.pillarWidth, this.height);
+    // Effect zone
+    ctx.fillStyle = effColor;
+    ctx.fillRect(this.x + pillarW, this.y, this.w - pillarW * 2, this.h);
 
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(this.x, this.y, this.width, this.height);
-
+    // Text
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px monospace';
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const ez = this.effectZone;
-    const centerX = ez.x + ez.w / 2;
-    ctx.fillText(`${this.type}${this.value}`, centerX, this.y + this.height / 2);
-
-    ctx.restore();
+    ctx.fillText(`${this.type}${this.value}`, this.x + this.w / 2, this.y + this.h / 2);
   }
 
   checkCollision(playerX, playerY, playerRadius) {
     if (this.passed) return false;
 
-    if (playerY - playerRadius > this.y + this.height) return false;
+    if (playerY - playerRadius > this.y + this.h) return false;
     if (playerY + playerRadius < this.y) return false;
 
     const ez = this.effectZone;

@@ -29,6 +29,7 @@ export class GameScene {
     this.finished = false;
     this.touching = false;
     this.touchZoneRatio = 0.15;
+    this._loopCount = 0;
   }
 
   onEnter() {
@@ -45,12 +46,18 @@ export class GameScene {
     const w = this.loop.width;
     const h = this.loop.height;
 
+    // Debug: throttled loop log
+    this._loopCount++;
+    if (this._loopCount % 60 === 0) {
+      const total = this.gates.length + this.enemies.length + this.bullets.length;
+      console.log(`[LOOP] Active entities: ${total}, Gates: ${this.gates.length}, Enemies: ${this.enemies.length}`);
+    }
+
     const spawned = this.spawner.update(dt, w);
     for (const s of spawned) {
-      if (s.type === 'gate') {
-        const gate = new Gate(s.x, s.y, s.width, s.height, s.pillarWidth, s.type, s.value, s.fallSpeed);
-        this.gates.push(gate);
-        console.log(`[GameScene] Gate added to entities. Total gates: ${this.gates.length}`);
+      if (s instanceof Gate) {
+        this.gates.push(s);
+        console.log(`[GameScene] Gate added. Total gates: ${this.gates.length}`);
       } else if (s.type === 'enemy') {
         const enemy = new Enemy(
           s.x, s.y, s.width, s.height, s.rows, s.cols,
@@ -61,6 +68,7 @@ export class GameScene {
       }
     }
 
+    // Update & collide gates
     for (let i = this.gates.length - 1; i >= 0; i--) {
       const gate = this.gates[i];
       gate.update(dt);
@@ -78,6 +86,7 @@ export class GameScene {
       }
     }
 
+    // Update & collide enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       enemy.update(dt, w, h);
@@ -106,6 +115,7 @@ export class GameScene {
       }
     }
 
+    // Update & collide bullets
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const bullet = this.bullets[i];
       bullet.update(dt);
@@ -129,6 +139,7 @@ export class GameScene {
       }
     }
 
+    // Auto-shoot
     this.shootTimer += dt;
     const hasEnemiesOnScreen = this.enemies.some(e => e.alive && e.y > 0 && e.y < h);
     if (this.shootTimer >= this.shootInterval && hasEnemiesOnScreen) {
@@ -170,7 +181,7 @@ export class GameScene {
     ctx.fillRect(0, 0, w, h);
 
     for (const gate of this.gates) {
-      gate.render(ctx, w, h);
+      gate.draw(ctx, h);
     }
 
     for (const enemy of this.enemies) {
