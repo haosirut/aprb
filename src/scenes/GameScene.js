@@ -45,20 +45,22 @@ export class GameScene {
     const w = this.loop.width;
     const h = this.loop.height;
 
-    // Спавн новых объектов
     const spawned = this.spawner.update(dt, w);
     for (const s of spawned) {
       if (s.type === 'gate') {
-        this.gates.push(new Gate(s.x, s.y, s.width, s.height, s.pillarWidth, s.type, s.value, s.fallSpeed));
+        const gate = new Gate(s.x, s.y, s.width, s.height, s.pillarWidth, s.type, s.value, s.fallSpeed);
+        this.gates.push(gate);
+        console.log(`[GameScene] Gate added to entities. Total gates: ${this.gates.length}`);
       } else if (s.type === 'enemy') {
-        this.enemies.push(new Enemy(
+        const enemy = new Enemy(
           s.x, s.y, s.width, s.height, s.rows, s.cols,
-          s.squareSize, s.squares, s.totalHP, s.activeSquares, s.laneWidth, s.fallSpeed,
-        ));
+          s.cubeSize, s.squares, s.totalHP, s.activeSquares, s.fallSpeed,
+        );
+        this.enemies.push(enemy);
+        console.log(`[GameScene] Enemy added. Total enemies: ${this.enemies.length}`);
       }
     }
 
-    // Ворота
     for (let i = this.gates.length - 1; i >= 0; i--) {
       const gate = this.gates[i];
       gate.update(dt);
@@ -70,13 +72,12 @@ export class GameScene {
         State.playerUnits = applyGateMath(State.playerUnits, gate.type, gate.value);
         this.player.setUnits(State.playerUnits);
         State.gatesPassed++;
-        if (State.playerUnits <= 0) {
+        if (State.playerUnits <= 1) {
           this._checkDefeat();
         }
       }
     }
 
-    // Враги: обновление + коллизия с игроком
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       enemy.update(dt, w, h);
@@ -105,7 +106,6 @@ export class GameScene {
       }
     }
 
-    // Пули
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const bullet = this.bullets[i];
       bullet.update(dt);
@@ -129,7 +129,6 @@ export class GameScene {
       }
     }
 
-    // Автострельба
     this.shootTimer += dt;
     const hasEnemiesOnScreen = this.enemies.some(e => e.alive && e.y > 0 && e.y < h);
     if (this.shootTimer >= this.shootInterval && hasEnemiesOnScreen) {
@@ -137,13 +136,10 @@ export class GameScene {
       this.bullets.push(new Bullet(this.player.x, this.player.y - this.player.radius));
     }
 
-    // Игрок
     this.player.update(dt, w);
 
-    // Прогресс
     State.levelProgress = this.spawner.progress;
 
-    // Победа
     if (this.spawner.finished && this.enemies.length === 0 && this.gates.length === 0) {
       this._checkVictory();
     }

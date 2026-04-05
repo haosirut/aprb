@@ -1,5 +1,7 @@
 console.log('[Entity] Gate loaded');
 
+import { State } from '../core/State.js';
+
 const GATE_COLORS = {
   '+': '#22c55e',
   '-': '#ef4444',
@@ -36,8 +38,8 @@ export class Gate {
     return this.y > canvasH + this.height;
   }
 
-  render(ctx, canvasW, canvasH) {
-    if (this.y < -this.height - 20 || this.y > canvasH + this.height + 20) return;
+  render(ctx, _canvasW, canvasH) {
+    if (this.y < -this.height - 50 || this.y > canvasH + this.height + 50) return;
 
     ctx.save();
 
@@ -74,6 +76,10 @@ export class Gate {
     if (playerX > ez.x && playerX < ez.x + ez.w) {
       this.passed = true;
       this.flashTimer = 0.15;
+
+      State.gateHistory.push({ type: this.type, value: this.value });
+      if (State.gateHistory.length > 2) State.gateHistory.shift();
+
       return true;
     }
 
