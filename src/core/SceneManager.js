@@ -51,6 +51,10 @@ export class SceneManager {
     if (this.current) this.current.render?.(ctx, w, h);
   }
 
+  handleResize(w, h) {
+    if (this.current) this.current.onResize?.(w, h);
+  }
+
   handlePointerDown(x, y) {
     if (this.current) this.current.onPointerDown?.(x, y);
   }

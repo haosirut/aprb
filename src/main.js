@@ -41,5 +41,9 @@ canvas.addEventListener('pointercancel', (e) => {
   sm.handlePointerUp();
 });
 
+window.addEventListener('resize', () => {
+  sm.handleResize(loop.width, loop.height);
+});
+
 loop.start();
 console.log('[Core] GateRunner MVP initialized');

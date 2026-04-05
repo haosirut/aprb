@@ -1,13 +1,15 @@
 console.log('[Entity] Player loaded');
 
 export class Player {
-  constructor(x, y, units) {
-    this.x = x;
-    this.y = y;
+  constructor(canvasWidth, canvasHeight, units) {
+    this.canvasWidth = canvasWidth;
+    this.canvasHeight = canvasHeight;
     this.units = units;
-    this.targetX = x;
+    this.targetX = canvasWidth / 2;
+    this.x = canvasWidth / 2;
+    this.y = canvasHeight * 0.95;
+    this.padding = 10;
     this.size = this._calcSize();
-    this.padding = 15;
     this.flashTimer = 0;
   }
 
@@ -15,15 +17,22 @@ export class Player {
     return 20 + this.units * 2;
   }
 
+  get radius() {
+    return this.size / 2;
+  }
+
   setUnits(val) {
     this.units = Math.max(0, val);
     this.flashTimer = 0.15;
   }
 
-  update(dt, width) {
+  update(dt, canvasWidth) {
+    this.canvasWidth = canvasWidth;
     const lerpSpeed = 12;
     this.x += (this.targetX - this.x) * lerpSpeed * dt;
-    this.x = Math.max(this.padding + this.size / 2, Math.min(width - this.padding - this.size / 2, this.x));
+    const minX = this.radius + this.padding;
+    const maxX = canvasWidth - this.radius - this.padding;
+    this.x = Math.max(minX, Math.min(maxX, this.x));
 
     const targetSize = this._calcSize();
     this.size += (targetSize - this.size) * 8 * dt;
@@ -33,6 +42,16 @@ export class Player {
     }
   }
 
+  onResize(newWidth, newHeight) {
+    this.canvasWidth = newWidth;
+    this.canvasHeight = newHeight;
+    this.y = newHeight * 0.95;
+    const minX = this.radius + this.padding;
+    const maxX = newWidth - this.radius - this.padding;
+    this.x = Math.max(minX, Math.min(maxX, this.x));
+    this.targetX = this.x;
+  }
+
   render(ctx) {
     ctx.save();
     const alpha = this.flashTimer > 0 ? 0.5 + 0.5 * Math.sin(this.flashTimer * 30) : 1;
@@ -40,13 +59,13 @@ export class Player {
 
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = '#aaa';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = '#000';

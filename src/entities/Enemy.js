@@ -1,27 +1,32 @@
 console.log('[Entity] Enemy loaded');
 
 export class Enemy {
-  constructor(x, y, hp, damage, speed, size) {
+  constructor(x, y, hp, damage, fallSpeed, horizontalSpeed, size) {
     this.x = x;
     this.y = y;
     this.hp = hp;
     this.maxHp = hp;
     this.damage = damage;
     this.size = size || 15;
-    this.speed = speed || 15;
+    this.fallSpeed = fallSpeed;
+    this.horizontalSpeed = horizontalSpeed || 15;
     this.moveDir = Math.random() > 0.5 ? 1 : -1;
     this.moveTimer = 0;
     this.flashTimer = 0;
     this.alive = true;
   }
 
-  update(dt, screenWidth) {
+  update(dt, screenWidth, canvasH) {
+    // Движение сверху вниз
+    this.y += this.fallSpeed * dt;
+
+    // Горизонтальное патрулирование
     this.moveTimer += dt;
     if (this.moveTimer > 1.5) {
       this.moveDir *= -1;
       this.moveTimer = 0;
     }
-    this.x += this.moveDir * this.speed * dt;
+    this.x += this.moveDir * this.horizontalSpeed * dt;
     this.x = Math.max(this.size, Math.min(screenWidth - this.size, this.x));
 
     if (this.flashTimer > 0) {
@@ -29,9 +34,12 @@ export class Enemy {
     }
   }
 
-  render(ctx, cameraY, canvasW, canvasH) {
-    const screenY = this.y - cameraY;
-    if (screenY < -50 || screenY > canvasH + 50) return;
+  isOffScreen(canvasH) {
+    return this.y > canvasH + this.size + 20;
+  }
+
+  render(ctx, canvasW, canvasH) {
+    if (this.y < -this.size - 20 || this.y > canvasH + this.size + 20) return;
 
     ctx.save();
 
@@ -40,28 +48,31 @@ export class Enemy {
     ctx.strokeStyle = this.flashTimer > 0 ? '#ff0' : '#ccc';
     ctx.lineWidth = 1.5;
 
+    // Ромб (алмаз)
     ctx.beginPath();
-    ctx.moveTo(this.x, screenY - this.size);
-    ctx.lineTo(this.x + this.size, screenY);
-    ctx.lineTo(this.x, screenY + this.size);
-    ctx.lineTo(this.x - this.size, screenY);
+    ctx.moveTo(this.x, this.y - this.size);
+    ctx.lineTo(this.x + this.size, this.y);
+    ctx.lineTo(this.x, this.y + this.size);
+    ctx.lineTo(this.x - this.size, this.y);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
+    // HP indicator
     if (this.hp > 1) {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(this.hp, this.x, screenY);
+      ctx.fillText(this.hp, this.x, this.y);
     }
 
+    // Damage indicator
     if (this.damage > 1) {
       ctx.fillStyle = '#f44';
       ctx.font = '8px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(`-${this.damage}`, this.x, screenY + this.size + 8);
+      ctx.fillText(`-${this.damage}`, this.x, this.y + this.size + 10);
     }
 
     ctx.restore();
@@ -76,10 +87,9 @@ export class Enemy {
     return this.hp <= 0;
   }
 
-  checkCollision(playerX, playerY, playerRadius, cameraY) {
-    const screenY = this.y - cameraY;
+  checkCollision(playerX, playerY, playerRadius) {
     const dx = playerX - this.x;
-    const dy = playerY - screenY;
+    const dy = playerY - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     return dist < playerRadius + this.size * 0.7;
   }

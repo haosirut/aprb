@@ -10,26 +10,26 @@ export class Bullet {
   }
 
   update(dt) {
+    // Движение строго вверх
     this.y -= this.speed * dt;
     if (this.y < -10) {
       this.alive = false;
     }
   }
 
-  render(ctx, cameraY, canvasW, canvasH) {
-    const screenY = this.y - cameraY;
-    if (screenY < -10 || screenY > canvasH + 10) return;
+  render(ctx, canvasW, canvasH) {
+    if (this.y < -10 || this.y > canvasH + 10) return;
 
     ctx.save();
     ctx.fillStyle = '#ff0';
     ctx.beginPath();
-    ctx.arc(this.x, screenY, this.radius, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = '#fa0';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(this.x, screenY, this.radius + 2, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.restore();

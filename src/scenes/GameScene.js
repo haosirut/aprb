@@ -1,7 +1,7 @@
 console.log('[Scene] GameScene loaded');
 
 import { State } from '../core/State.js';
-import { generateLevel } from '../core/LevelGenerator.js';
+import { LevelGenerator } from '../core/LevelGenerator.js';
 import { Player } from '../entities/Player.js';
 import { Gate } from '../entities/Gate.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -15,30 +15,28 @@ export class GameScene {
     this.loop = loop;
     this.levelNum = levelNum;
 
-    const levelData = generateLevel(levelNum);
-    this.levelLength = levelData.length;
-    this.scrollSpeed = 120;
+    const w = loop.width;
+    const h = loop.height;
 
-    this.player = new Player(loop.width / 2, loop.height * 0.8, State.units);
-    this.cameraY = 0;
-
-    this.gates = levelData.objects
-      .filter(o => o.type === 'gate')
-      .map(o => new Gate(o.x, o.y, o.gapWidth, o.value, loop.width));
-
-    this.enemies = levelData.objects
-      .filter(o => o.type === 'enemy')
-      .map(o => new Enemy(o.x, o.y, o.hp, o.damage, o.speed, o.size));
-
+    this.player = new Player(w, h, State.units);
+    this.generator = new LevelGenerator(levelNum);
+    this.gates = [];
+    this.enemies = [];
     this.bullets = [];
+
     this.shootTimer = 0;
     this.shootInterval = 0.4;
     this.finished = false;
     this.touching = false;
+    this.touchZoneRatio = 0.15;
   }
 
   onEnter() {
     console.log(`[Core] GameScene entered for level ${this.levelNum}`);
+  }
+
+  onResize(w, h) {
+    this.player.onResize(w, h);
   }
 
   update(dt) {
@@ -47,41 +45,40 @@ export class GameScene {
     const w = this.loop.width;
     const h = this.loop.height;
 
-    this.cameraY += this.scrollSpeed * dt;
-    const progress = this.cameraY / this.levelLength;
-    State.levelProgress = Math.min(progress, 1);
-
-    this.player.update(dt, w);
-
-    // Gates are in world-space; only camera moves, gates stay at their generated y
-    for (let i = this.gates.length - 1; i >= 0; i--) {
-      const gate = this.gates[i];
-      if (gate.y < this.cameraY - 100) {
-        this.gates.splice(i, 1);
-        continue;
-      }
-      if (!gate.passed) {
-        const result = gate.checkCollision(this.player.x, this.player.y, this.player.size / 2, this.cameraY);
-        if (result === 'pass') {
-          this.player.setUnits(this.player.units + gate.value);
-          State.units = this.player.units;
-          this._checkDefeat();
-        } else if (result === 'wall') {
-          this.player.setUnits(this.player.units - 1);
-          State.units = this.player.units;
-          this._checkDefeat();
-        }
+    // Генерация новых объектов (спавн за верхним краем)
+    const spawned = this.generator.update(dt, w);
+    for (const s of spawned) {
+      if (s.type === 'gate') {
+        this.gates.push(new Gate(s.x, s.y, s.width, s.height, s.pillarWidth, s.effectValue, s.fallSpeed));
+      } else if (s.type === 'enemy') {
+        this.enemies.push(new Enemy(s.x, s.y, s.hp, s.damage, s.fallSpeed, s.horizontalSpeed, s.size));
       }
     }
 
+    // Обновление ворот (движение сверху вниз)
+    for (let i = this.gates.length - 1; i >= 0; i--) {
+      const gate = this.gates[i];
+      gate.update(dt);
+      if (gate.isOffScreen(h)) {
+        this.gates.splice(i, 1);
+        continue;
+      }
+      if (gate.checkCollision(this.player.x, this.player.y, this.player.radius)) {
+        this.player.setUnits(this.player.units + gate.effectValue);
+        State.units = this.player.units;
+        this._checkDefeat();
+      }
+    }
+
+    // Обновление врагов (движение сверху вниз + горизонтальное)
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
-      enemy.update(dt, w);
-      if (enemy.y < this.cameraY - 100) {
+      enemy.update(dt, w, h);
+      if (enemy.isOffScreen(h)) {
         this.enemies.splice(i, 1);
         continue;
       }
-      if (enemy.checkCollision(this.player.x, this.player.y, this.player.size / 2, this.cameraY)) {
+      if (enemy.checkCollision(this.player.x, this.player.y, this.player.radius)) {
         this.player.setUnits(this.player.units - enemy.damage);
         State.units = this.player.units;
         enemy.alive = false;
@@ -90,18 +87,7 @@ export class GameScene {
       }
     }
 
-    this.shootTimer += dt;
-    const hasEnemiesOnScreen = this.enemies.some(e => {
-      const screenY = e.y - this.cameraY;
-      return screenY > 0 && screenY < h;
-    });
-    if (this.shootTimer >= this.shootInterval && hasEnemiesOnScreen) {
-      this.shootTimer = 0;
-      // Bullet world-y = cameraY + player screen-y - player radius
-      const worldY = this.cameraY + this.player.y - this.player.size / 2;
-      this.bullets.push(new Bullet(this.player.x, worldY));
-    }
-
+    // Обновление пуль (движение вверх)
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const bullet = this.bullets[i];
       bullet.update(dt);
@@ -122,7 +108,22 @@ export class GameScene {
       }
     }
 
-    if (State.levelProgress >= 1) {
+    // Автострельба
+    this.shootTimer += dt;
+    const hasEnemiesOnScreen = this.enemies.some(e => e.y > 0 && e.y < h);
+    if (this.shootTimer >= this.shootInterval && hasEnemiesOnScreen) {
+      this.shootTimer = 0;
+      this.bullets.push(new Bullet(this.player.x, this.player.y - this.player.radius));
+    }
+
+    // Обновление игрока
+    this.player.update(dt, w);
+
+    // Прогресс
+    State.levelProgress = this.generator.progress;
+
+    // Проверка победы: все объекты заспавнены и все ушли с экрана
+    if (this.generator.finished && this.enemies.length === 0 && this.gates.length === 0) {
       this._checkVictory();
     }
   }
@@ -155,15 +156,15 @@ export class GameScene {
     ctx.fillRect(0, 0, w, h);
 
     for (const gate of this.gates) {
-      gate.render(ctx, this.cameraY, w, h);
+      gate.render(ctx, w, h);
     }
 
     for (const enemy of this.enemies) {
-      enemy.render(ctx, this.cameraY, w, h);
+      enemy.render(ctx, w, h);
     }
 
     for (const bullet of this.bullets) {
-      bullet.render(ctx, this.cameraY, w, h);
+      bullet.render(ctx, w, h);
     }
 
     this.player.render(ctx);
@@ -188,7 +189,7 @@ export class GameScene {
     ctx.fillStyle = '#333';
     ctx.fillRect(barX, barY, barW, barH);
 
-    ctx.fillStyle = '#0f0';
+    ctx.fillStyle = '#22c55e';
     ctx.fillRect(barX, barY, barW * State.levelProgress, barH);
 
     ctx.strokeStyle = '#555';
@@ -205,16 +206,24 @@ export class GameScene {
 
   onPointerDown(x, y) {
     this.touching = true;
-    this.player.targetX = x;
+    this._handleTouch(x, y);
   }
 
   onPointerMove(x, y) {
     if (this.touching) {
-      this.player.targetX = x;
+      this._handleTouch(x, y);
     }
   }
 
   onPointerUp() {
     this.touching = false;
+  }
+
+  _handleTouch(x, y) {
+    const h = this.loop.height;
+    const touchZoneStart = h * (1 - this.touchZoneRatio);
+    if (y >= touchZoneStart) {
+      this.player.targetX = x;
+    }
   }
 }

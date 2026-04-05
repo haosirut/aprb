@@ -1,74 +1,100 @@
 console.log('[Entity] Gate loaded');
 
 export class Gate {
-  constructor(x, y, gapWidth, value, screenWidth) {
+  constructor(x, y, width, height, pillarWidth, effectValue, fallSpeed) {
     this.x = x;
     this.y = y;
-    this.gapWidth = gapWidth;
-    this.value = value;
-    this.screenWidth = screenWidth;
-    this.height = 30;
-    this.thickness = 6;
+    this.width = width;
+    this.height = height;
+    this.pillarWidth = pillarWidth;
+    this.effectValue = effectValue;
+    this.speed = fallSpeed;
     this.passed = false;
+    this.flashTimer = 0;
   }
 
-  render(ctx, cameraY, canvasW, canvasH) {
-    const screenY = this.y - cameraY;
-    if (screenY < -50 || screenY > canvasH + 50) return;
+  get leftPillar() {
+    return { x: this.x, w: this.pillarWidth };
+  }
 
-    const gapLeft = this.x - this.gapWidth / 2;
-    const gapRight = this.x + this.gapWidth / 2;
-    const color = this.value > 0 ? '#0f0' : '#f00';
-    const bgColor = this.value > 0 ? '#0a3a0a' : '#3a0a0a';
+  get effectZone() {
+    return { x: this.x + this.pillarWidth, w: this.width - 2 * this.pillarWidth };
+  }
+
+  get rightPillar() {
+    return { x: this.x + this.width - this.pillarWidth, w: this.pillarWidth };
+  }
+
+  update(dt) {
+    this.y += this.speed * dt;
+    if (this.flashTimer > 0) {
+      this.flashTimer -= dt;
+    }
+  }
+
+  isOffScreen(canvasH) {
+    return this.y > canvasH + this.height;
+  }
+
+  render(ctx, canvasW, canvasH) {
+    if (this.y < -this.height - 20 || this.y > canvasH + this.height + 20) return;
 
     ctx.save();
 
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, screenY - this.height / 2, gapLeft, this.height);
-    ctx.fillRect(gapRight, screenY - this.height / 2, this.screenWidth - gapRight, this.height);
+    // Левый столб
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x, this.y, this.pillarWidth, this.height);
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, screenY - this.height / 2, gapLeft, this.height);
-    ctx.strokeRect(gapRight, screenY - this.height / 2, this.screenWidth - gapRight, this.height);
+    // Правый столб
+    ctx.fillRect(this.x + this.width - this.pillarWidth, this.y, this.pillarWidth, this.height);
 
-    ctx.fillStyle = color;
-    ctx.font = 'bold 18px monospace';
+    // Зона эффекта
+    const effectColor = this.effectValue > 0 ? '#22c55e' : '#ef4444';
+    const flashColor = this.flashTimer > 0 ? '#ffffff' : effectColor;
+    ctx.fillStyle = flashColor;
+    ctx.fillRect(
+      this.x + this.pillarWidth,
+      this.y,
+      this.width - 2 * this.pillarWidth,
+      this.height,
+    );
+
+    // Обводка всего элемента
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+    // Текст +1 / -1 по центру зоны эффекта
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.value > 0 ? '+1' : '-1', this.x, screenY);
+    const effectZoneCenterX = this.x + this.pillarWidth + (this.width - 2 * this.pillarWidth) / 2;
+    const text = this.effectValue > 0 ? `+${this.effectValue}` : `${this.effectValue}`;
+    ctx.fillText(text, effectZoneCenterX, this.y + this.height / 2);
 
     ctx.restore();
   }
 
-  /**
-   * Returns 'pass' if player is in the gap (apply value),
-   * 'wall' if player hits the wall (penalty),
-   * null if no collision.
-   */
-  checkCollision(playerX, playerY, playerRadius, cameraY) {
-    if (this.passed) return null;
+  checkCollision(playerX, playerY, playerRadius) {
+    if (this.passed) return false;
 
-    const screenY = this.y - cameraY;
-    const dy = Math.abs(playerY - screenY);
-    if (dy > this.height / 2 + playerRadius) return null;
+    // Проверка Y-band: игрок пересекает ворота по вертикали
+    if (playerY - playerRadius > this.y + this.height) return false;
+    if (playerY + playerRadius < this.y) return false;
 
-    // Player is in the gate's Y band — check if in gap or on wall
-    const gapLeft = this.x - this.gapWidth / 2;
-    const gapRight = this.x + this.gapWidth / 2;
-    if (playerX > gapLeft + playerRadius && playerX < gapRight - playerRadius) {
+    // Игрок в Y-band ворот — проверяем, в какой зоне
+    const ez = this.effectZone;
+    const effectLeft = ez.x;
+    const effectRight = ez.x + ez.w;
+
+    if (playerX > effectLeft && playerX < effectRight) {
+      // Игрок в зоне эффекта
       this.passed = true;
-      return 'pass';
+      this.flashTimer = 0.15;
+      return true;
     }
 
-    // Player overlaps wall area
-    if (playerX + playerRadius > gapLeft && playerX - playerRadius < gapRight) {
-      // Partial overlap with gap — still counts as pass
-      this.passed = true;
-      return 'pass';
-    }
-
-    // On the solid wall part — don't mark as passed, will keep checking
-    return 'wall';
+    return false;
   }
 }
