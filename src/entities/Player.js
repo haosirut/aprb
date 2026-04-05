@@ -1,41 +1,38 @@
 console.log('[Entity] Player loaded');
 
 export class Player {
-  constructor(canvasWidth, canvasHeight, units) {
-    this.canvasWidth = canvasWidth;
-    this.canvasHeight = canvasHeight;
-    this.units = units;
-    this.targetX = canvasWidth / 2;
-    this.x = canvasWidth / 2;
+  constructor(canvasWidth, canvasHeight) {
+    this.width = canvasWidth / 5;
+    this.height = this.width;
+    this.x = canvasWidth / 2 - this.width / 2;
     this.y = canvasHeight * 0.95;
-    this.padding = 10;
-    this.size = this._calcSize();
+    this.targetX = this.x;
     this.flashTimer = 0;
   }
 
-  _calcSize() {
-    return 20 + this.units * 0.5;
+  get centerX() {
+    return this.x + this.width / 2;
   }
 
-  get radius() {
-    return this.size / 2;
+  get centerY() {
+    return this.y + this.height / 2;
   }
 
   setUnits(val) {
-    this.units = Math.max(1, Math.floor(val));
     this.flashTimer = 0.15;
   }
 
-  update(dt, canvasWidth) {
-    this.canvasWidth = canvasWidth;
+  update(dt, canvasWidth, canvasHeight) {
+    this.y = canvasHeight * 0.95;
+    this.width = canvasWidth / 5;
+    this.height = this.width;
+
     const lerpSpeed = 12;
     this.x += (this.targetX - this.x) * lerpSpeed * dt;
-    const minX = this.radius + this.padding;
-    const maxX = canvasWidth - this.radius - this.padding;
-    this.x = Math.max(minX, Math.min(maxX, this.x));
 
-    const targetSize = this._calcSize();
-    this.size += (targetSize - this.size) * 8 * dt;
+    const minX = 0;
+    const maxX = canvasWidth - this.width;
+    this.x = Math.max(minX, Math.min(maxX, this.x));
 
     if (this.flashTimer > 0) {
       this.flashTimer -= dt;
@@ -43,12 +40,11 @@ export class Player {
   }
 
   onResize(newWidth, newHeight) {
-    this.canvasWidth = newWidth;
-    this.canvasHeight = newHeight;
+    this.width = newWidth / 5;
+    this.height = this.width;
     this.y = newHeight * 0.95;
-    const minX = this.radius + this.padding;
-    const maxX = newWidth - this.radius - this.padding;
-    this.x = Math.max(minX, Math.min(maxX, this.x));
+    const maxX = newWidth - this.width;
+    this.x = Math.max(0, Math.min(maxX, this.x));
     this.targetX = this.x;
   }
 
@@ -58,21 +54,11 @@ export class Player {
     ctx.globalAlpha = alpha;
 
     ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(this.x, this.y, this.width, this.height);
 
     ctx.strokeStyle = '#aaa';
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#000';
-    ctx.font = `bold ${Math.max(10, this.size / 3)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(this.units, this.x, this.y);
+    ctx.strokeRect(this.x, this.y, this.width, this.height);
 
     ctx.restore();
   }

@@ -1,5 +1,7 @@
 console.log('[Entity] Enemy loaded');
 
+const ROW_PROBS = [1.0, 0.9, 0.8, 0.7, 0.6];
+
 export class Enemy {
   constructor(x, y, width, height, rows, cols, cubeSize, squares, totalHP, activeSquares, fallSpeed) {
     this.x = x;
@@ -26,8 +28,8 @@ export class Enemy {
     return this.y + this.height / 2;
   }
 
-  update(dt, _screenWidth, _canvasH) {
-    this.y += this.fallSpeed * dt;
+  update(dt, _screenWidth, _canvasH, speedMultiplier) {
+    this.y += this.fallSpeed * (speedMultiplier || 1) * dt;
     if (this.flashTimer > 0) {
       this.flashTimer -= dt;
     }
@@ -88,7 +90,7 @@ export class Enemy {
     return true;
   }
 
-  checkBulletCollision(bulletX, bulletY, bulletRadius) {
+  checkPlayerCollision(playerX, playerY, playerWidth, playerHeight) {
     const cs = this.cubeSize;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -98,34 +100,11 @@ export class Enemy {
         const sy = this.y + r * cs;
 
         if (
-          bulletX + bulletRadius > sx &&
-          bulletX - bulletRadius < sx + cs &&
-          bulletY + bulletRadius > sy &&
-          bulletY - bulletRadius < sy + cs
+          playerX + playerWidth > sx &&
+          playerX < sx + cs &&
+          playerY + playerHeight > sy &&
+          playerY < sy + cs
         ) {
-          return { row: r, col: c, hp: this.squares[r][c].hp };
-        }
-      }
-    }
-    return null;
-  }
-
-  checkPlayerCollision(playerX, playerY, playerRadius) {
-    const cs = this.cubeSize;
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        if (!this.squares[r][c].active) continue;
-
-        const sx = this.x + c * cs;
-        const sy = this.y + r * cs;
-
-        const closestX = Math.max(sx, Math.min(playerX, sx + cs));
-        const closestY = Math.max(sy, Math.min(playerY, sy + cs));
-        const dx = playerX - closestX;
-        const dy = playerY - closestY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < playerRadius) {
           return { row: r, col: c, hp: this.squares[r][c].hp };
         }
       }

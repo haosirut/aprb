@@ -1,6 +1,7 @@
 console.log('[Scene] MenuScene loaded');
 
-import { LevelSelectScene } from './LevelSelectScene.js';
+import { GameScene } from './GameScene.js';
+import { State } from '../core/State.js';
 
 export class MenuScene {
   constructor(sceneManager, loop) {
@@ -21,12 +22,13 @@ export class MenuScene {
     const btnH = 60;
     const cx = w / 2 - btnW / 2;
     this.buttons = [
-      { x: cx, y: h / 2, w: btnW, h: btnH, label: '▶  ИГРАТЬ', action: () => this._goToSelect() },
+      { x: cx, y: h / 2, w: btnW, h: btnH, label: '▶  ИГРАТЬ', action: () => this._startGame() },
     ];
   }
 
-  _goToSelect() {
-    this.sm.push(new LevelSelectScene(this.sm, this.loop));
+  _startGame() {
+    State.resetForGame();
+    this.sm.push(new GameScene(this.sm, this.loop));
   }
 
   update(dt) {}
@@ -45,7 +47,7 @@ export class MenuScene {
 
     ctx.fillStyle = '#666';
     ctx.font = `${Math.min(16, w * 0.03)}px monospace`;
-    ctx.fillText('MVP Edition', w / 2, h * 0.25 + Math.min(48, w * 0.08) + 10);
+    ctx.fillText('Infinite Edition', w / 2, h * 0.25 + Math.min(48, w * 0.08) + 10);
 
     for (const btn of this.buttons) {
       ctx.fillStyle = '#222';

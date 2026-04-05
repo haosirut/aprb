@@ -9,12 +9,10 @@ export class ResultScene {
     this.sm = sceneManager;
     this.loop = loop;
     this.buttons = [];
-    this.won = State.lastResult === 'won';
   }
 
   onEnter() {
     this._buildUI();
-    console.log(`[Core] ResultScene: ${this.won ? 'WON' : 'LOST'}`);
   }
 
   _buildUI() {
@@ -51,22 +49,22 @@ export class ResultScene {
     const bx = w / 2 - boxW / 2;
     const by = h * 0.15;
 
-    ctx.fillStyle = this.won ? '#0a1a0a' : '#1a0a0a';
+    ctx.fillStyle = '#1a0a0a';
     ctx.fillRect(bx, by, boxW, boxH);
-    ctx.strokeStyle = this.won ? '#0f0' : '#f00';
+    ctx.strokeStyle = '#f00';
     ctx.lineWidth = 3;
     ctx.strokeRect(bx, by, boxW, boxH);
 
-    ctx.fillStyle = this.won ? '#0f0' : '#f00';
+    ctx.fillStyle = '#f00';
     ctx.font = `bold ${Math.min(40, w * 0.07)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.won ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ', w / 2, by + 45);
+    ctx.fillText('ПОРАЖЕНИЕ', w / 2, by + 45);
 
     ctx.fillStyle = '#aaa';
     ctx.font = `${Math.min(16, w * 0.03)}px monospace`;
-    ctx.fillText(this.won ? 'Уровень пройден!' : 'Все юниты потеряны', w / 2, by + 90);
-    ctx.fillText(`Осталось юнитов: ${State.playerUnits}`, w / 2, by + 115);
+    ctx.fillText('Все юниты потеряны', w / 2, by + 90);
+    ctx.fillText(`Осталось HP: ${Math.floor(State.playerUnits)}`, w / 2, by + 115);
 
     for (const btn of this.buttons) {
       ctx.fillStyle = '#1a1a1a';

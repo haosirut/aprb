@@ -5,35 +5,29 @@ import { Spawner } from '../core/Spawner.js';
 import { Player } from '../entities/Player.js';
 import { Gate } from '../entities/Gate.js';
 import { Enemy } from '../entities/Enemy.js';
-import { Bullet } from '../entities/Bullet.js';
 import { ResultScene } from './ResultScene.js';
 
 export class GameScene {
-  constructor(sceneManager, loop, levelNum) {
+  constructor(sceneManager, loop) {
     this.name = 'GameScene';
     this.sm = sceneManager;
     this.loop = loop;
-    this.levelNum = levelNum;
 
     const w = loop.width;
     const h = loop.height;
 
-    this.player = new Player(w, h, State.playerUnits);
-    this.spawner = new Spawner(levelNum);
+    this.player = new Player(w, h);
+    this.spawner = new Spawner();
     this.gates = [];
     this.enemies = [];
-    this.bullets = [];
 
-    this.shootTimer = 0;
-    this.shootInterval = 0.4;
     this.finished = false;
     this.touching = false;
     this.touchZoneRatio = 0.15;
-    this._loopCount = 0;
   }
 
   onEnter() {
-    console.log(`[Core] GameScene entered for level ${this.levelNum}`);
+    console.log('[Core] GameScene entered (infinite mode)');
   }
 
   onResize(w, h) {
@@ -45,26 +39,18 @@ export class GameScene {
 
     const w = this.loop.width;
     const h = this.loop.height;
-
-    // Debug: throttled loop log
-    this._loopCount++;
-    if (this._loopCount % 60 === 0) {
-      const total = this.gates.length + this.enemies.length + this.bullets.length;
-      console.log(`[LOOP] Active entities: ${total}, Gates: ${this.gates.length}, Enemies: ${this.enemies.length}`);
-    }
+    const speedMul = this.spawner.speedMultiplier;
 
     const spawned = this.spawner.update(dt, w);
     for (const s of spawned) {
       if (s instanceof Gate) {
         this.gates.push(s);
-        console.log(`[GameScene] Gate added. Total gates: ${this.gates.length}`);
       } else if (s.type === 'enemy') {
         const enemy = new Enemy(
           s.x, s.y, s.width, s.height, s.rows, s.cols,
           s.cubeSize, s.squares, s.totalHP, s.activeSquares, s.fallSpeed,
         );
         this.enemies.push(enemy);
-        console.log(`[GameScene] Enemy added. Total enemies: ${this.enemies.length}`);
       }
     }
 
@@ -72,15 +58,16 @@ export class GameScene {
     for (let i = this.gates.length - 1; i >= 0; i--) {
       const gate = this.gates[i];
       gate.update(dt);
+      gate.speed = 150 * speedMul;
       if (gate.isOffScreen(h)) {
         this.gates.splice(i, 1);
         continue;
       }
-      if (gate.checkCollision(this.player.x, this.player.y, this.player.radius)) {
+      if (gate.checkCollision(this.player.centerX, this.player.centerY, this.player.width / 2)) {
         State.playerUnits = applyGateMath(State.playerUnits, gate.type, gate.value);
         this.player.setUnits(State.playerUnits);
         State.gatesPassed++;
-        if (State.playerUnits <= 1) {
+        if (State.playerUnits <= 0) {
           this._checkDefeat();
         }
       }
@@ -89,7 +76,7 @@ export class GameScene {
     // Update & collide enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
-      enemy.update(dt, w, h);
+      enemy.update(dt, w, h, speedMul);
       if (enemy.isOffScreen(h)) {
         this.enemies.splice(i, 1);
         continue;
@@ -98,7 +85,7 @@ export class GameScene {
         this.enemies.splice(i, 1);
         continue;
       }
-      const hit = enemy.checkPlayerCollision(this.player.x, this.player.y, this.player.radius);
+      const hit = enemy.checkPlayerCollision(this.player.x, this.player.y, this.player.width, this.player.height);
       if (hit) {
         State.playerUnits = Math.max(1, Math.floor(State.playerUnits - Math.floor(hit.hp)));
         this.player.setUnits(State.playerUnits);
@@ -109,51 +96,13 @@ export class GameScene {
           enemy.alive = false;
           this.enemies.splice(i, 1);
         }
-        if (State.playerUnits <= 1) {
+        if (State.playerUnits <= 0) {
           this._checkDefeat();
         }
       }
     }
 
-    // Update & collide bullets
-    for (let i = this.bullets.length - 1; i >= 0; i--) {
-      const bullet = this.bullets[i];
-      bullet.update(dt);
-      if (!bullet.alive) {
-        this.bullets.splice(i, 1);
-        continue;
-      }
-      for (let j = this.enemies.length - 1; j >= 0; j--) {
-        const enemy = this.enemies[j];
-        if (!enemy.alive) continue;
-        const sq = enemy.checkBulletCollision(bullet.x, bullet.y, bullet.radius);
-        if (sq) {
-          bullet.alive = false;
-          this.bullets.splice(i, 1);
-          enemy.hitSquare(sq.row, sq.col);
-          if (!enemy.alive) {
-            this.enemies.splice(j, 1);
-          }
-          break;
-        }
-      }
-    }
-
-    // Auto-shoot
-    this.shootTimer += dt;
-    const hasEnemiesOnScreen = this.enemies.some(e => e.alive && e.y > 0 && e.y < h);
-    if (this.shootTimer >= this.shootInterval && hasEnemiesOnScreen) {
-      this.shootTimer = 0;
-      this.bullets.push(new Bullet(this.player.x, this.player.y - this.player.radius));
-    }
-
-    this.player.update(dt, w);
-
-    State.levelProgress = this.spawner.progress;
-
-    if (this.spawner.finished && this.enemies.length === 0 && this.gates.length === 0) {
-      this._checkVictory();
-    }
+    this.player.update(dt, w, h);
   }
 
   _checkDefeat() {
@@ -161,16 +110,6 @@ export class GameScene {
     this.finished = true;
     State.gameState = 'lost';
     State.lastResult = 'lost';
-    setTimeout(() => {
-      this.sm.replace(new ResultScene(this.sm, this.loop));
-    }, 500);
-  }
-
-  _checkVictory() {
-    if (this.finished) return;
-    this.finished = true;
-    State.gameState = 'won';
-    State.lastResult = 'won';
     setTimeout(() => {
       this.sm.replace(new ResultScene(this.sm, this.loop));
     }, 500);
@@ -188,43 +127,25 @@ export class GameScene {
       enemy.render(ctx, w, h);
     }
 
-    for (const bullet of this.bullets) {
-      bullet.render(ctx, w, h);
-    }
-
     this.player.render(ctx);
 
     this._renderHUD(ctx, w, h);
   }
 
-  _renderHUD(ctx, w, h) {
+  _renderHUD(ctx) {
     ctx.save();
 
-    ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.min(20, w * 0.04)}px monospace`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(`Units: ${State.playerUnits}`, 16, 16);
-
-    const barW = Math.min(180, w * 0.35);
-    const barH = 10;
-    const barX = w - barW - 16;
-    const barY = 20;
-
-    ctx.fillStyle = '#333';
-    ctx.fillRect(barX, barY, barW, barH);
-
-    ctx.fillStyle = '#22c55e';
-    ctx.fillRect(barX, barY, barW * State.levelProgress, barH);
-
+    ctx.fillStyle = '#000';
+    ctx.fillRect(10, 10, 140, 30);
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 1;
-    ctx.strokeRect(barX, barY, barW, barH);
+    ctx.strokeRect(10, 10, 140, 30);
 
-    ctx.fillStyle = '#888';
-    ctx.font = `${Math.min(12, w * 0.025)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`${Math.floor(State.levelProgress * 100)}%`, barX + barW / 2, barY + barH + 14);
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`HP: ${Math.floor(State.playerUnits)}`, 16, 25);
 
     ctx.restore();
   }
@@ -248,7 +169,7 @@ export class GameScene {
     const h = this.loop.height;
     const touchZoneStart = h * (1 - this.touchZoneRatio);
     if (y >= touchZoneStart) {
-      this.player.targetX = x;
+      this.player.targetX = x - this.player.width / 2;
     }
   }
 }
