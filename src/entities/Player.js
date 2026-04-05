@@ -14,7 +14,7 @@ export class Player {
   }
 
   _calcSize() {
-    return 20 + this.units * 2;
+    return 20 + this.units * 0.5;
   }
 
   get radius() {
@@ -22,7 +22,7 @@ export class Player {
   }
 
   setUnits(val) {
-    this.units = Math.max(0, val);
+    this.units = Math.max(1, Math.floor(val));
     this.flashTimer = 0.15;
   }
 

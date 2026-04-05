@@ -71,9 +71,9 @@ export class ConfirmScene {
 
     ctx.fillStyle = '#aaa';
     ctx.font = `${Math.min(14, w * 0.028)}px monospace`;
-    ctx.fillText('Пройдите через зелёные ворота (+1)', w / 2, by + 80);
-    ctx.fillText('Избегайте красных ворот (-1)', w / 2, by + 100);
-    ctx.fillText('Уклоняйтесь от врагов!', w / 2, by + 120);
+    ctx.fillText('Ворота: + - * /  (изменяют юниты)', w / 2, by + 80);
+    ctx.fillText('Уклоняйтесь от врагов-блоков!', w / 2, by + 100);
+    ctx.fillText('Все операции округляются вниз', w / 2, by + 120);
 
     for (const btn of this.buttons) {
       ctx.fillStyle = '#1a1a1a';

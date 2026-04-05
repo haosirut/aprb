@@ -66,7 +66,7 @@ export class ResultScene {
     ctx.fillStyle = '#aaa';
     ctx.font = `${Math.min(16, w * 0.03)}px monospace`;
     ctx.fillText(this.won ? 'Уровень пройден!' : 'Все юниты потеряны', w / 2, by + 90);
-    ctx.fillText(`Осталось юнитов: ${State.units}`, w / 2, by + 115);
+    ctx.fillText(`Осталось юнитов: ${State.playerUnits}`, w / 2, by + 115);
 
     for (const btn of this.buttons) {
       ctx.fillStyle = '#1a1a1a';

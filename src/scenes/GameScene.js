@@ -1,7 +1,7 @@
 console.log('[Scene] GameScene loaded');
 
-import { State } from '../core/State.js';
-import { LevelGenerator } from '../core/LevelGenerator.js';
+import { State, applyGateMath } from '../core/State.js';
+import { Spawner } from '../core/Spawner.js';
 import { Player } from '../entities/Player.js';
 import { Gate } from '../entities/Gate.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -18,8 +18,8 @@ export class GameScene {
     const w = loop.width;
     const h = loop.height;
 
-    this.player = new Player(w, h, State.units);
-    this.generator = new LevelGenerator(levelNum);
+    this.player = new Player(w, h, State.playerUnits);
+    this.spawner = new Spawner(levelNum);
     this.gates = [];
     this.enemies = [];
     this.bullets = [];
@@ -45,17 +45,20 @@ export class GameScene {
     const w = this.loop.width;
     const h = this.loop.height;
 
-    // Генерация новых объектов (спавн за верхним краем)
-    const spawned = this.generator.update(dt, w);
+    // Спавн новых объектов
+    const spawned = this.spawner.update(dt, w);
     for (const s of spawned) {
       if (s.type === 'gate') {
-        this.gates.push(new Gate(s.x, s.y, s.width, s.height, s.pillarWidth, s.effectValue, s.fallSpeed));
+        this.gates.push(new Gate(s.x, s.y, s.width, s.height, s.pillarWidth, s.type, s.value, s.fallSpeed));
       } else if (s.type === 'enemy') {
-        this.enemies.push(new Enemy(s.x, s.y, s.hp, s.damage, s.fallSpeed, s.horizontalSpeed, s.size));
+        this.enemies.push(new Enemy(
+          s.x, s.y, s.width, s.height, s.rows, s.cols,
+          s.squareSize, s.squares, s.totalHP, s.activeSquares, s.laneWidth, s.fallSpeed,
+        ));
       }
     }
 
-    // Обновление ворот (движение сверху вниз)
+    // Ворота
     for (let i = this.gates.length - 1; i >= 0; i--) {
       const gate = this.gates[i];
       gate.update(dt);
@@ -64,13 +67,16 @@ export class GameScene {
         continue;
       }
       if (gate.checkCollision(this.player.x, this.player.y, this.player.radius)) {
-        this.player.setUnits(this.player.units + gate.effectValue);
-        State.units = this.player.units;
-        this._checkDefeat();
+        State.playerUnits = applyGateMath(State.playerUnits, gate.type, gate.value);
+        this.player.setUnits(State.playerUnits);
+        State.gatesPassed++;
+        if (State.playerUnits <= 0) {
+          this._checkDefeat();
+        }
       }
     }
 
-    // Обновление врагов (движение сверху вниз + горизонтальное)
+    // Враги: обновление + коллизия с игроком
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       enemy.update(dt, w, h);
@@ -78,16 +84,28 @@ export class GameScene {
         this.enemies.splice(i, 1);
         continue;
       }
-      if (enemy.checkCollision(this.player.x, this.player.y, this.player.radius)) {
-        this.player.setUnits(this.player.units - enemy.damage);
-        State.units = this.player.units;
-        enemy.alive = false;
+      if (!enemy.alive) {
         this.enemies.splice(i, 1);
-        this._checkDefeat();
+        continue;
+      }
+      const hit = enemy.checkPlayerCollision(this.player.x, this.player.y, this.player.radius);
+      if (hit) {
+        State.playerUnits = Math.max(1, Math.floor(State.playerUnits - Math.floor(hit.hp)));
+        this.player.setUnits(State.playerUnits);
+        enemy.squares[hit.row][hit.col].active = false;
+        enemy.activeSquares--;
+        enemy.displayedHP = Math.max(0, enemy.displayedHP - Math.floor(hit.hp));
+        if (enemy.activeSquares <= 0) {
+          enemy.alive = false;
+          this.enemies.splice(i, 1);
+        }
+        if (State.playerUnits <= 1) {
+          this._checkDefeat();
+        }
       }
     }
 
-    // Обновление пуль (движение вверх)
+    // Пули
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const bullet = this.bullets[i];
       bullet.update(dt);
@@ -96,11 +114,14 @@ export class GameScene {
         continue;
       }
       for (let j = this.enemies.length - 1; j >= 0; j--) {
-        if (bullet.checkCollision(this.enemies[j])) {
+        const enemy = this.enemies[j];
+        if (!enemy.alive) continue;
+        const sq = enemy.checkBulletCollision(bullet.x, bullet.y, bullet.radius);
+        if (sq) {
           bullet.alive = false;
           this.bullets.splice(i, 1);
-          this.enemies[j].hit();
-          if (!this.enemies[j].alive) {
+          enemy.hitSquare(sq.row, sq.col);
+          if (!enemy.alive) {
             this.enemies.splice(j, 1);
           }
           break;
@@ -110,45 +131,42 @@ export class GameScene {
 
     // Автострельба
     this.shootTimer += dt;
-    const hasEnemiesOnScreen = this.enemies.some(e => e.y > 0 && e.y < h);
+    const hasEnemiesOnScreen = this.enemies.some(e => e.alive && e.y > 0 && e.y < h);
     if (this.shootTimer >= this.shootInterval && hasEnemiesOnScreen) {
       this.shootTimer = 0;
       this.bullets.push(new Bullet(this.player.x, this.player.y - this.player.radius));
     }
 
-    // Обновление игрока
+    // Игрок
     this.player.update(dt, w);
 
     // Прогресс
-    State.levelProgress = this.generator.progress;
+    State.levelProgress = this.spawner.progress;
 
-    // Проверка победы: все объекты заспавнены и все ушли с экрана
-    if (this.generator.finished && this.enemies.length === 0 && this.gates.length === 0) {
+    // Победа
+    if (this.spawner.finished && this.enemies.length === 0 && this.gates.length === 0) {
       this._checkVictory();
     }
   }
 
   _checkDefeat() {
-    if (this.player.units <= 0) {
-      this.finished = true;
-      State.gameState = 'lost';
-      State.lastResult = 'lost';
-      State.units = 0;
-      setTimeout(() => {
-        this.sm.replace(new ResultScene(this.sm, this.loop));
-      }, 500);
-    }
+    if (this.finished) return;
+    this.finished = true;
+    State.gameState = 'lost';
+    State.lastResult = 'lost';
+    setTimeout(() => {
+      this.sm.replace(new ResultScene(this.sm, this.loop));
+    }, 500);
   }
 
   _checkVictory() {
-    if (!this.finished) {
-      this.finished = true;
-      State.gameState = 'won';
-      State.lastResult = 'won';
-      setTimeout(() => {
-        this.sm.replace(new ResultScene(this.sm, this.loop));
-      }, 500);
-    }
+    if (this.finished) return;
+    this.finished = true;
+    State.gameState = 'won';
+    State.lastResult = 'won';
+    setTimeout(() => {
+      this.sm.replace(new ResultScene(this.sm, this.loop));
+    }, 500);
   }
 
   render(ctx, w, h) {
@@ -179,7 +197,7 @@ export class GameScene {
     ctx.font = `bold ${Math.min(20, w * 0.04)}px monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(`Units: ${State.units}`, 16, 16);
+    ctx.fillText(`Units: ${State.playerUnits}`, 16, 16);
 
     const barW = Math.min(180, w * 0.35);
     const barH = 10;
