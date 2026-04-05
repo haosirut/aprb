@@ -42,19 +42,23 @@ GateRunner — минималистичная 2D «бегалка» (vertical ru
 - Пересчёт позиции при `resize` окна через `onResize(w, h)`
 
 #### Ворота (`src/entities/Gate.js`)
-- Спавнятся **парами** (2 ворота на шаг), заполняют 5 полос экрана
+- Спавнятся **парами** (2 ворота на шаг) по сегментному алгоритму:
+  - **Первые ворота**: тип `−` или `/` (негативные), ширина `randomInt(1, 4)` полос, стартовая полоса `randomInt(1, 6−w1)`
+  - **Свободные полосы** разбиваются на непрерывные сегменты
+  - **Вторые ворота**: тип `+` или `*` (позитивные), размещаются в случайном сегменте свободных полос
+  - Ворота НЕ обязаны заполнять все 5 полос — свободные полосы пусты
 - 3 визуальные зоны на каждые ворота:
   - **Левый столб** — нейтральный серый `#4a4a4a`, ширина 10px
   - **Зона эффекта** — цвет зависит от типа
   - **Правый столб** — нейтральный серый `#4a4a4a`, ширина 10px
-- 4 типа ворот (независимый рандом для каждой из пары):
+- 4 типа ворот с ограничением по роли в паре:
 
-| Тип | Символ | Цвет зоны | Значение | Эффект |
-|-----|--------|-----------|----------|--------|
-| INCREASE | `+` | `#22c55e` (зелёный) | `randomInt(2, 100)` | `units + value` |
-| DECREASE | `-` | `#ef4444` (красный) | `randomInt(2, 100)` | `units - value` |
-| MULTIPLY | `*` | `#3b82f6` (синий) | `randomInt(2, 10)` | `units * value` |
-| DIVIDE | `/` | `#f97316` (оранжевый) | `randomInt(2, 10)` | `units / value` |
+| Тип | Символ | Цвет зоны | Значение | Роль | Эффект |
+|-----|--------|-----------|----------|------|--------|
+| INCREASE | `+` | `#22c55e` (зелёный) | `randomInt(2, 100)` | Позитивное (2-е) | `units + value` |
+| DECREASE | `−` | `#ef4444` (красный) | `randomInt(2, 100)` | Негативное (1-е) | `units − value` |
+| MULTIPLY | `*` | `#3b82f6` (синий) | `randomInt(2, 10)` | Позитивное (2-е) | `units * value` |
+| DIVIDE | `/` | `#f97316` (оранжевый) | `randomInt(2, 10)` | Негативное (1-е) | `units / value` |
 
 - Текст по центру зоны: `${symbol}${value}` (белый, monospace)
 - Математика изменения юнитов:
@@ -71,32 +75,38 @@ GateRunner — минималистичная 2D «бегалка» (vertical ru
   }
   ```
 - Флаг `passed = true` после первого касания, повторные проходы игнорируются
-- Конструктор: `new Gate({ x, y, w, type, value })` — Spawner создаёт инстансы напрямую
+- Конструктор: `new Gate({ x, y, w, h, type, value, lanes })` — Spawner создаёт инстансы напрямую
 - Высота фиксирована: `h = 40px`, скорость `speed = 150px/s`
 - Движение строго сверху вниз (`y += speed * dt`)
 - Culling только за нижним краем экрана (нет отброски выше экрана)
 - Флаг `passed` влияет ТОЛЬКО на коллизию, НЕ на отрисовку
 
 #### Враги (`src/entities/Enemy.js`)
-- Визуал: сетка блоков (кубиков), фиксированный размер кубика `cubeSize = 12px`
-- Ширина: `randomInt(5, 25)` кубиков, Высота: ровно 5 кубиков
-- Алгоритм заполнения grid:
-  - `row 0`: все ячейки `true`
+- Визуал: сетка блоков (кубиков), привязанных к полосам экрана
+- **Ширина**: `randomInt(1, 5)` полос, стартовая полоса `randomInt(1, 6 - widthLanes)`
+- **Размер кубика**: `cubeSize = lanePx / CUBES_PER_LANE` (динамический, зависит от ширины экрана)
+- **Сетка**: `GRID_COLS = widthLanes * 5`, `GRID_ROWS = 5` (всегда 5 строк)
+- Алгоритм заполнения grid (гравитация):
+  - `row 0`: все ячейки `true` (верхний ряд всегда полон)
   - `row 1..4`: `false` если ячейка сверху `false`, иначе `Math.random() < 0.5`
 - Здоровье при спавне (секвенциальная формула):
   ```
-  HP = ((playerUnits OP1 val1) OP2 val2) * 2
-  // OP — последние 2 пройденных ворота из State.gateHistory
-  // Math.max(1, Math.floor()) после КАЖДОЙ операции
+  function calcEnemyHP(playerUnits) {
+    let hp = Math.max(1, Math.floor(playerUnits))
+    if (gateHistory[0]) hp = applyOp(hp, gateHistory[0])
+    if (gateHistory[1]) hp = applyOp(hp, gateHistory[1])
+    return Math.max(1, Math.floor(hp * 2))
+  }
+  // Пример: Units=10, +10 -> 20, *2 -> 40, *2 = 80
   ```
-- HP на кубик: `Math.floor(totalHP / activeSquaresCount)`
-- Отрисовка кубиков: `ctx.fillRect(x + c*cubeSize + 1, y + r*cubeSize + 1, cubeSize-2, cubeSize-2)`
+- HP на кубик: `Math.max(1, Math.floor(totalHP / activeSquaresCount))`
+- Отрисовка кубиков: `fillRect(x + c*cubeSize, y + r*cubeSize, cubeSize-1, cubeSize-1)`
 - Цвет активного кубика: fill `#b91c1c`, stroke `#7f1d1d`
 - HP текст: отображается СТРОГО по центру прямоугольника врага (`textAlign: center`, `textBaseline: middle`, `14px monospace`)
 - Движение сверху вниз (`y += fallSpeed * dt`)
-- Коллизия пуля → кубик: `square.hp -= 1`, при `hp <= 0` → кубик деактивируется
-- Коллизия игрок → кубик: `playerUnits -= Math.floor(square.hp)`
-- При `activeSquares <= 0` → враг уничтожен
+- Коллизия пуля -> кубик: `square.hp -= 1`, при `hp <= 0` -> кубик деактивируется
+- Коллизия игрок -> кубик: `playerUnits -= Math.floor(square.hp)`
+- При `activeSquares <= 0` -> враг уничтожен
 
 #### Пули (`src/entities/Bullet.js`)
 - Автострельба каждые 0.4с, если на экране есть живые враги
@@ -162,11 +172,11 @@ gate-runner-mvp/
 │   │   ├── GameLoop.js          # Игровой цикл: rAF, deltaTime, resize
 │   │   ├── SceneManager.js      # Стек сцен: push/pop/replace/clearAndPush
 │   │   ├── State.js             # Глобальное состояние + applyGateMath()
-│   │   └── Spawner.js           # Спавнер: Gate-инстансы, nextSpawnY, 160px шаг
+│   │   └── Spawner.js           # Спавнер: сегментные ворота, lane-based враги, nextSpawnY
 │   ├── entities/
 │   │   ├── Player.js            # Игрок: Y=0.95, lerp по X, size=20+units*0.5
 │   │   ├── Gate.js              # Ворота: 4 типа (+, -, *, /), 3 зоны, Math.floor
-│   │   ├── Enemy.js             # Враги: сетка 5×(5-25) кубиков, cubeSize=12, sequential HP
+│   │   ├── Enemy.js             # Враги: lane-based сетка, cubeSize=lanePx/5, sequential HP
 │   │   └── Bullet.js            # Пули: автострельба, движение вверх
 │   ├── scenes/
 │   │   ├── MenuScene.js         # Главное меню
@@ -207,16 +217,24 @@ calculateEnemyHP(units, history) — ((units OP1 v1) OP2 v2) * 2, секвенц
 ### Spawner (`src/core/Spawner.js`)
 ```
 new Spawner(levelNum)           — создаёт спавнер для уровня
-.update(dt, canvasWidth)        — возвращает массив {type, ...params} объектов
+.update(dt, canvasWidth)        — возвращает массив Gate-инстансов / enemy-объектов
 .progress                       — прогресс уровня (0 → 1)
 .finished                       — все шаги завершены
 ```
 Последовательность: `[GATE_PAIR, GATE_PAIR, ENEMY]` → цикл. Первый спавн — мгновенный.
 Шаг: `FIXED_GAP = 160px`, скорость: `FALL_SPEED = 150px/s`, высота ворот: `GATE_HEIGHT = 40px`.
 Каскадный спавн через `nextSpawnY` — каждая пара/враг размещается выше предыдущего.
-Ворота: `new Gate({ x, y, w, type, value })` — инстансы создаются в Spawner.
-Враг HP: `calculateEnemyHP(State.playerUnits, State.gateHistory)`.
-Кубик врага: `cubeSize = 12px`, ширина `randomInt(5, 25)` кубиков.
+
+Алгоритм спавна ворот:
+- Первые ворота: тип `-` или `/`, ширина `randomInt(1,4)` полос, старт `randomInt(1, 6-w1)`
+- Свободные полосы → непрерывные сегменты → вторые ворота: тип `+` или `*` в случайном сегменте
+- Ворота НЕ обязаны заполнять все 5 полос
+
+Алгоритм спавна врагов:
+- Ширина: `randomInt(1, 5)` полос, старт: `randomInt(1, 6-widthLanes)`
+- Сетка: `cols = widthLanes * 5`, `rows = 5`, `cubeSize = lanePx / 5`
+- Гравитация: под пустотой не может быть кубика, иначе `Math.random() < 0.5`
+- HP: `calculateEnemyHP(State.playerUnits, State.gateHistory)` → секвенциально, `Math.max(1, Math.floor())`
 
 ### Система коллизий
 - **Gate ↔ Player**: AABB по Y-band + X в зоне эффекта
@@ -363,3 +381,31 @@ npx prettier --check src/
 **ЗАДАЧА_00 — Синхронизация README:**
 - Обновлены разделы: «Ворота», «Структура уровней», «Spawner API», «Структура проекта»
 - Добавлен раздел `[FIX_2026-04-06_V4]`
+
+---
+
+## [FIX_2026-04-06_V5] Переработана логика спавна ворот/врагов, внедрён последовательный расчёт HP, обновлён алгоритм заполнения сетки
+
+**ЗАДАЧА_01 — Сегментный алгоритм спавна ворот:**
+- Первые ворота: тип строго `−` или `/` (негативные)
+- Вторые ворота: тип строго `+` или `*` (позитивные)
+- Свободные полосы (не занятые первыми воротами) разбиваются на непрерывные сегменты
+- Вторые ворота размещаются в случайном сегменте с рандомной шириной
+- Ворота больше НЕ обязаны заполнять все 5 полос
+- Gate constructor принимает `h` из config
+
+**ЗАДАЧА_02 — Lane-based враги и сетка:**
+- Ширина врага: `randomInt(1, 5)` полос (было 5-25 кубиков)
+- Стартовая позиция: `randomInt(1, 6 - widthLanes)` полос
+- `cubeSize = lanePx / CUBES_PER_LANE` — динамический, привязан к ширине полосы
+- `GRID_COLS = widthLanes * 5`, `GRID_ROWS = 5`
+- Отрисовка кубиков: `fillRect(x + c*cs, y + r*cs, cs-1, cs-1)`
+
+**ЗАДАЧА_03 — Секвенциальный расчёт HP (подтверждён):**
+- Формула: `hp = floor(units); hp = applyOp(hp, gate[0]); hp = applyOp(hp, gate[1]); return floor(hp * 2)`
+- Проверка: Units=10, +10->20, *2->40, *2=80
+- `Math.max(1, Math.floor())` после КАЖДОЙ операции
+
+**ЗАДАЧА_00 — Синхронизация README:**
+- Обновлены разделы: «Ворота», «Враги», «Spawner API», «Структура проекта»
+- Добавлен раздел `[FIX_2026-04-06_V5]`

@@ -43,19 +43,21 @@ export class Enemy {
     ctx.save();
 
     const cs = this.cubeSize;
+    const drawSize = cs - 1;
+
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         if (!this.squares[r][c].active) continue;
 
-        const sx = this.x + c * cs + 1;
-        const sy = this.y + r * cs + 1;
+        const sx = this.x + c * cs;
+        const sy = this.y + r * cs;
 
         ctx.fillStyle = this.flashTimer > 0 ? '#ffffff' : '#b91c1c';
-        ctx.fillRect(sx, sy, cs - 2, cs - 2);
+        ctx.fillRect(sx, sy, drawSize, drawSize);
 
         ctx.strokeStyle = '#7f1d1d';
         ctx.lineWidth = 1;
-        ctx.strokeRect(sx, sy, cs - 2, cs - 2);
+        ctx.strokeRect(sx, sy, drawSize, drawSize);
       }
     }
 

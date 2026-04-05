@@ -3,24 +3,15 @@ console.log('[Core] Spawner loaded');
 import { State, calculateEnemyHP } from './State.js';
 import { Gate } from '../entities/Gate.js';
 
-const GATE_TYPES = ['+', '-', '*', '/'];
+const TOTAL_LANES = 5;
+const CUBES_PER_LANE = 5;
 const FIXED_GAP = 160;
 const FALL_SPEED = 150;
-const SPAWN_CYCLE = ['GATE_PAIR', 'GATE_PAIR', 'ENEMY'];
-const CUBE_SIZE = 12;
 const GATE_HEIGHT = 40;
+const SPAWN_CYCLE = ['GATE_PAIR', 'GATE_PAIR', 'ENEMY'];
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function randomGateType() {
-  return GATE_TYPES[randomInt(0, GATE_TYPES.length - 1)];
-}
-
-function randomGateValue(type) {
-  if (type === '+' || type === '-') return randomInt(2, 100);
-  return randomInt(2, 10);
 }
 
 export class Spawner {
@@ -85,43 +76,97 @@ export class Spawner {
   }
 
   _spawnGatePair(canvasWidth) {
-    const laneWidth = canvasWidth / 5;
-    const w1 = randomInt(1, 4);
-    const w2 = 5 - w1;
-    const maxOffset = Math.max(0, Math.floor(canvasWidth - (w1 + w2) * laneWidth));
-    const offsetX = randomInt(0, maxOffset);
+    const lanePx = canvasWidth / TOTAL_LANES;
 
-    const type1 = randomGateType();
-    const type2 = randomGateType();
-    const value1 = randomGateValue(type1);
-    const value2 = randomGateValue(type2);
+    // 1. First gate: type (- or /)
+    const type1 = Math.random() < 0.5 ? '-' : '/';
+    const val1 = type1 === '-' ? randomInt(2, 100) : randomInt(2, 10);
+    const w1 = randomInt(1, TOTAL_LANES - 1);
+    const p1 = randomInt(1, TOTAL_LANES - w1 + 1); // 1-based start lane
 
-    const g1 = new Gate({ x: offsetX, w: w1 * laneWidth, type: type1, value: value1 });
-    const g2 = new Gate({ x: offsetX + w1 * laneWidth, w: w2 * laneWidth, type: type2, value: value2 });
+    // 2. Find free lanes (1-based)
+    const freeLanes = [];
+    for (let i = 1; i <= TOTAL_LANES; i++) {
+      if (i < p1 || i > p1 + w1 - 1) {
+        freeLanes.push(i);
+      }
+    }
 
-    g1.y = g2.y = this.nextSpawnY;
+    // 3. Split free lanes into continuous segments
+    const segments = [[freeLanes[0]]];
+    for (let i = 1; i < freeLanes.length; i++) {
+      if (freeLanes[i] === freeLanes[i - 1] + 1) {
+        segments[segments.length - 1].push(freeLanes[i]);
+      } else {
+        segments.push([freeLanes[i]]);
+      }
+    }
+
+    // 4. Second gate: type (+ or *), placed in a random segment
+    const segIndex = randomInt(0, segments.length - 1);
+    const seg = segments[segIndex];
+    const maxW2 = seg.length;
+    const w2 = randomInt(1, maxW2);
+    const offsetInSeg = randomInt(0, maxW2 - w2);
+    const p2 = seg[offsetInSeg]; // 1-based start lane
+
+    const type2 = Math.random() < 0.5 ? '+' : '*';
+    const val2 = type2 === '+' ? randomInt(2, 100) : randomInt(2, 10);
+
+    // 5. Create Gate instances
+    const gate1 = new Gate({
+      x: (p1 - 1) * lanePx,
+      y: this.nextSpawnY,
+      w: w1 * lanePx,
+      h: GATE_HEIGHT,
+      type: type1,
+      value: val1,
+      lanes: w1,
+    });
+
+    const gate2 = new Gate({
+      x: (p2 - 1) * lanePx,
+      y: this.nextSpawnY,
+      w: w2 * lanePx,
+      h: GATE_HEIGHT,
+      type: type2,
+      value: val2,
+      lanes: w2,
+    });
 
     State.totalGates += 2;
 
     console.log('[SPAWN] Created gates:', {
-      x1: g1.x, y1: g1.y, type1: g1.type, val1: g1.value,
-      x2: g2.x, y2: g2.y, type2: g2.type, val2: g2.value,
+      x1: gate1.x, y1: gate1.y, type1: gate1.type, val1: gate1.value, lanes1: w1,
+      x2: gate2.x, y2: gate2.y, type2: gate2.type, val2: gate2.value, lanes2: w2,
     });
 
     this.nextSpawnY -= (GATE_HEIGHT + FIXED_GAP);
 
-    return [g1, g2];
+    return [gate1, gate2];
   }
 
   _spawnEnemy(canvasWidth) {
-    const cols = randomInt(5, 25);
-    const rows = 5;
-    const cubeSize = CUBE_SIZE;
+    const lanePx = canvasWidth / TOTAL_LANES;
+    const widthLanes = randomInt(1, TOTAL_LANES);
+    const maxStartPos = TOTAL_LANES + 1 - widthLanes;
+    const startLane = randomInt(1, maxStartPos);
 
+    const gridCols = widthLanes * CUBES_PER_LANE;
+    const gridRows = 5;
+    const cubeSize = lanePx / CUBES_PER_LANE;
+
+    const totalWidth = gridCols * cubeSize;
+    const totalHeight = gridRows * cubeSize;
+
+    const x = (startLane - 1) * lanePx;
+    const y = this.nextSpawnY;
+
+    // Fill grid: top row always full, gravity-based below
     const grid = [];
-    for (let r = 0; r < rows; r++) {
+    for (let r = 0; r < gridRows; r++) {
       grid[r] = [];
-      for (let c = 0; c < cols; c++) {
+      for (let c = 0; c < gridCols; c++) {
         if (r === 0) {
           grid[r][c] = true;
         } else if (!grid[r - 1][c]) {
@@ -132,28 +177,23 @@ export class Spawner {
       }
     }
 
-    const totalWidth = cols * cubeSize;
-    const totalHeight = rows * cubeSize;
-    const x = randomInt(0, Math.max(0, Math.floor(canvasWidth - totalWidth)));
-    const y = this.nextSpawnY;
-
     const totalHP = calculateEnemyHP(State.playerUnits, State.gateHistory);
 
     let activeCount = 0;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < gridRows; r++) {
+      for (let c = 0; c < gridCols; c++) {
         if (grid[r][c]) activeCount++;
       }
     }
 
-    const hpPerSquare = activeCount > 0 ? Math.floor(totalHP / activeCount) : 1;
+    const baseHP = activeCount > 0 ? totalHP / activeCount : 1;
 
     const squares = [];
-    for (let r = 0; r < rows; r++) {
+    for (let r = 0; r < gridRows; r++) {
       squares[r] = [];
-      for (let c = 0; c < cols; c++) {
+      for (let c = 0; c < gridCols; c++) {
         if (grid[r][c]) {
-          squares[r][c] = { active: true, hp: hpPerSquare };
+          squares[r][c] = { active: true, hp: Math.max(1, Math.floor(baseHP)) };
         } else {
           squares[r][c] = { active: false, hp: 0 };
         }
@@ -162,11 +202,11 @@ export class Spawner {
 
     this.nextSpawnY -= (totalHeight + FIXED_GAP);
 
-    console.log(`[SPAWN] Created enemy: cols=${cols} rows=${rows} hp=${totalHP} y=${y}`);
+    console.log(`[SPAWN] Created enemy: lanes=${widthLanes} startLane=${startLane} cols=${gridCols} rows=${gridRows} hp=${totalHP} y=${y}`);
 
     return {
       type: 'enemy', x, y, width: totalWidth, height: totalHeight,
-      rows, cols, cubeSize, squares,
+      rows: gridRows, cols: gridCols, cubeSize, squares,
       totalHP, displayedHP: totalHP,
       activeSquares: activeCount,
       fallSpeed: FALL_SPEED,

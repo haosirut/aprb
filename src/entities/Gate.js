@@ -17,13 +17,13 @@ export class Gate {
     this.x = config.x;
     this.y = config.y;
     this.w = config.w;
-    this.h = 40;
+    this.h = config.h || 40;
     this.type = config.type;
     this.value = config.value;
     this.passed = false;
     this.speed = 150;
     this.pillarWidth = 10;
-    this.lanes = Math.round(this.w / (window.innerWidth / 5));
+    this.lanes = config.lanes || 0;
     this.flashTimer = 0;
   }
 
@@ -47,7 +47,6 @@ export class Gate {
   }
 
   draw(ctx, canvasH) {
-    // Culling only at bottom edge — never skip gates above screen
     if (this.y > canvasH + this.h) return;
 
     _drawFrame++;
@@ -58,16 +57,13 @@ export class Gate {
     const pillarW = this.pillarWidth;
     const effColor = this.flashTimer > 0 ? '#ffffff' : this.getColor();
 
-    // Pillars
     ctx.fillStyle = '#4a4a4a';
     ctx.fillRect(this.x, this.y, pillarW, this.h);
     ctx.fillRect(this.x + this.w - pillarW, this.y, pillarW, this.h);
 
-    // Effect zone
     ctx.fillStyle = effColor;
     ctx.fillRect(this.x + pillarW, this.y, this.w - pillarW * 2, this.h);
 
-    // Text
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
